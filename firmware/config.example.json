@@ -1,0 +1,27 @@
+{
+    "nodo": {
+        "id": "nodo_01",
+        "nombre": "Sensor profundidad 10 cm",
+        "profundidad_cm": 10
+    },
+
+    "wifi": {
+        "ssid": "NOMBRE_DE_TU_RED",
+        "password": "TU_CONTRASENA"
+    },
+
+    "firebase": {
+        "url": "https://TU-PROYECTO-default-rtdb.firebaseio.com",
+        "ruta_base": "nodos"
+    },
+
+    "medicion": {
+        "intervalo_segundos": 5,
+        "guardar_historial": true
+    },
+
+    "sensor": {
+        "tipo": "simulado",
+        "pin": 4
+    }
+}
