@@ -1,2 +1,11 @@
-# monitoreo-suelo-esp32
-Sistema IoT con ESP32-C3 para monitoreo de temperatura y humedad del suelo
+monitoreo-suelo-esp32/
+│
+├── firmware/
+│   ├── main.py
+│   ├── wifi_manager.py
+│   ├── sensor_manager.py
+│   └── firebase_manager.py
+│
+├── config.example.json
+├── version.json
+└── README.md
