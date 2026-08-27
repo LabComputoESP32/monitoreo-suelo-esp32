@@ -1,0 +1,2 @@
+Actualizacion desde GitHub funcionando correctamente.
+Version de prueba OTA 1.
