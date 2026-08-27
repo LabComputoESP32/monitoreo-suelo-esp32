@@ -1,2 +1,2 @@
 Actualizacion desde GitHub funcionando correctamente.
-Version de prueba OTA 1.
+Version de prueba OTA 2.
