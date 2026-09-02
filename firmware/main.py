@@ -3,7 +3,7 @@ import ujson
 
 from wifi_manager import conectar_wifi
 
-from sensor_manager import leer_sensor
+from sensor_manager import obtener_promedio
 
 from firebase_manager import (
     enviar_datos,
@@ -41,7 +41,7 @@ config_github = config["github"]
 
 
 # ==========================================
-# MOSTRAR INFORMACION DEL NODO
+# INFORMACION DEL NODO
 # ==========================================
 
 print()
@@ -78,8 +78,6 @@ print(
     "================================"
 )
 
-print()
-
 
 # ==========================================
 # CONECTAR WIFI
@@ -92,14 +90,6 @@ wlan = conectar_wifi(
 
 if not wlan.isconnected():
 
-    print(
-        "No hay conexion WiFi."
-    )
-
-    print(
-        "El sistema no puede continuar."
-    )
-
     raise Exception(
         "Sin conexion WiFi"
     )
@@ -110,10 +100,7 @@ if not wlan.isconnected():
 # ==========================================
 
 print()
-
-print(
-    "Consultando actualizaciones..."
-)
+print("Consultando actualizaciones...")
 
 verificar_y_actualizar(
     config_github
@@ -121,18 +108,38 @@ verificar_y_actualizar(
 
 
 # ==========================================
-# CONFIGURACION DE MEDICION
+# CONFIGURACION DE MUESTREO
 # ==========================================
 
-intervalo = (
+intervalo_muestreo = (
     config_medicion[
-        "intervalo_segundos"
+        "intervalo_muestreo_segundos"
+    ]
+)
+
+cantidad_muestras = (
+    config_medicion[
+        "cantidad_muestras"
     ]
 )
 
 
+print()
+
+print(
+    "Lecturas por promedio:",
+    cantidad_muestras
+)
+
+print(
+    "Intervalo entre lecturas:",
+    intervalo_muestreo,
+    "segundos"
+)
+
+
 # ==========================================
-# RECUPERAR NUMERO DE MUESTRA
+# RECUPERAR CONTADOR
 # ==========================================
 
 contador = obtener_siguiente_muestra(
@@ -141,17 +148,10 @@ contador = obtener_siguiente_muestra(
 )
 
 
-# Si Firebase no responde,
-# NO comenzamos desde cero.
-# Esperamos hasta recuperar el contador.
-
 while contador is None:
 
-    print()
-
     print(
-        "No se pudo recuperar "
-        "el numero de muestra."
+        "No se pudo recuperar contador."
     )
 
     print(
@@ -166,18 +166,6 @@ while contador is None:
     )
 
 
-print()
-
-print(
-    "Sistema listo."
-)
-
-print(
-    "Iniciando desde muestra:",
-    contador
-)
-
-
 # ==========================================
 # CICLO PRINCIPAL
 # ==========================================
@@ -187,58 +175,85 @@ while True:
     print()
 
     print(
-        "--------------------------------"
+        "================================"
     )
 
     print(
-        "Muestra:",
+        "PERIODO:",
         contador
     )
 
-
-    # ======================================
-    # LEER SENSOR
-    # ======================================
-
-    temperatura, humedad = leer_sensor(
-        config_sensor
+    print(
+        "================================"
     )
 
 
+    # ======================================
+    # TOMAR MUESTRAS Y PROMEDIAR
+    # ======================================
+
+    temperatura_promedio, humedad_promedio = (
+        obtener_promedio(
+            config_sensor,
+            cantidad_muestras,
+            intervalo_muestreo
+        )
+    )
+
+
+    # ======================================
+    # VERIFICAR PROMEDIO
+    # ======================================
+
+    if (
+        temperatura_promedio is None
+        or humedad_promedio is None
+    ):
+
+        print(
+            "No fue posible calcular promedio"
+        )
+
+        continue
+
+
+    print()
+
     print(
-        "Temperatura:",
-        temperatura,
+        "---------- PROMEDIO ----------"
+    )
+
+    print(
+        "Temperatura promedio:",
+        temperatura_promedio,
         "C"
     )
 
     print(
-        "Humedad:",
-        humedad,
+        "Humedad promedio:",
+        humedad_promedio,
         "%"
     )
 
 
     # ======================================
-    # ENVIAR DATOS A FIREBASE
+    # ENVIAR SOLO PROMEDIO
     # ======================================
 
     resultado = enviar_datos(
         config_firebase,
         config_nodo,
-        temperatura,
-        humedad,
-        contador
+        temperatura_promedio,
+        humedad_promedio,
+        contador,
+        cantidad_muestras
     )
 
-
-    # ======================================
-    # ACTUALIZAR CONTADOR
-    # ======================================
 
     if resultado:
 
         print(
-            "Datos enviados correctamente"
+            "Promedio enviado correctamente"
         )
 
         contador += 1
@@ -246,26 +261,10 @@ while True:
     else:
 
         print(
-            "Error enviando datos"
+            "Error enviando promedio"
         )
 
         print(
-            "La muestra",
-            contador,
-            "se intentara nuevamente"
+            "Se conserva el numero:",
+            contador
         )
-
-
-    # ======================================
-    # ESPERAR SIGUIENTE MEDICION
-    # ======================================
-
-    print(
-        "Esperando",
-        intervalo,
-        "segundos..."
-    )
-
-    time.sleep(
-        intervalo
-    )
