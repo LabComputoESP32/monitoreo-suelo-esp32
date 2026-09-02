@@ -87,12 +87,21 @@ wlan = conectar_wifi(
     config_wifi
 )
 
+while not wlan.isconnected():
 
-if not wlan.isconnected():
+    print()
+    print("No se pudo conectar al WiFi.")
+    print("Reintentando en 10 segundos...")
 
-    raise Exception(
-        "Sin conexion WiFi"
+    time.sleep(10)
+
+    wlan = conectar_wifi(
+        config_wifi
     )
+
+
+print()
+print("WiFi listo para continuar")
 
 
 # ==========================================
