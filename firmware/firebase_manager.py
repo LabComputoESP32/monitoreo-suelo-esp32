@@ -1,5 +1,5 @@
 import urequests
-import ujson
+import time
 
 
 # ==========================================
@@ -11,26 +11,30 @@ def obtener_siguiente_muestra(
     config_nodo
 ):
 
-    FIREBASE = config_firebase["url"]
-    RUTA_BASE = config_firebase["ruta_base"]
-    NODO = config_nodo["id"]
+    url_base = config_firebase["url"].rstrip("/")
+    ruta_base = config_firebase["ruta_base"]
+    nodo_id = config_nodo["id"]
 
-    URL_ACTUAL = (
-        FIREBASE
+    url = (
+        url_base
         + "/"
-        + RUTA_BASE
+        + ruta_base
         + "/"
-        + NODO
+        + nodo_id
         + "/ultima_lectura.json"
     )
 
-    print()
-    print("Consultando ultima muestra en Firebase...")
+    respuesta = None
 
     try:
 
+        print(
+            "Consultando ultima muestra en Firebase..."
+        )
+
         respuesta = urequests.get(
-            URL_ACTUAL
+            url,
+            timeout=10
         )
 
         print(
@@ -38,61 +42,98 @@ def obtener_siguiente_muestra(
             respuesta.status_code
         )
 
-        if respuesta.status_code == 200:
+        if respuesta.status_code != 200:
 
-            datos = respuesta.json()
+            print(
+                "No se pudo consultar ultima muestra"
+            )
 
-            respuesta.close()
-
-            if datos is None:
-
-                print("No existen muestras anteriores")
-                print("Comenzando desde muestra 0")
-
-                return 0
+            return None
 
 
-            if "muestra" in datos:
-
-                ultima_muestra = datos["muestra"]
-
-                siguiente_muestra = (
-                    ultima_muestra + 1
-                )
-
-                print(
-                    "Ultima muestra:",
-                    ultima_muestra
-                )
-
-                print(
-                    "Siguiente muestra:",
-                    siguiente_muestra
-                )
-
-                return siguiente_muestra
+        datos = respuesta.json()
 
 
-            print("No existe campo muestra")
+        # ==================================
+        # SI TODAVIA NO HAY DATOS
+        # ==================================
+
+        if datos is None:
+
+            print(
+                "No existen muestras anteriores"
+            )
+
+            print(
+                "Siguiente muestra: 0"
+            )
 
             return 0
 
 
-        respuesta.close()
+        # ==================================
+        # SI NO EXISTE CAMPO MUESTRA
+        # ==================================
 
-        return None
+        if "muestra" not in datos:
+
+            print(
+                "No existe campo muestra"
+            )
+
+            print(
+                "Siguiente muestra: 0"
+            )
+
+            return 0
+
+
+        ultima_muestra = datos["muestra"]
+
+        siguiente_muestra = (
+            ultima_muestra + 1
+        )
+
+
+        print(
+            "Ultima muestra:",
+            ultima_muestra
+        )
+
+        print(
+            "Siguiente muestra:",
+            siguiente_muestra
+        )
+
+
+        return siguiente_muestra
 
 
     except Exception as error:
 
-        print("Error obteniendo contador:")
+        print()
+        print(
+            "ERROR consultando Firebase:"
+        )
+
         print(error)
 
         return None
 
 
+    finally:
+
+        if respuesta is not None:
+
+            try:
+                respuesta.close()
+
+            except:
+                pass
+
+
 # ==========================================
-# ENVIAR PROMEDIO A FIREBASE
+# ENVIAR DATOS A FIREBASE
 # ==========================================
 
 def enviar_datos(
@@ -104,41 +145,13 @@ def enviar_datos(
     cantidad_lecturas
 ):
 
-    FIREBASE = config_firebase["url"]
-    RUTA_BASE = config_firebase["ruta_base"]
-
-    NODO = config_nodo["id"]
-
-    PROFUNDIDAD = (
-        config_nodo["profundidad_cm"]
-    )
+    url_base = config_firebase["url"].rstrip("/")
+    ruta_base = config_firebase["ruta_base"]
+    nodo_id = config_nodo["id"]
 
 
     # ======================================
-    # RUTAS FIREBASE
-    # ======================================
-
-    URL_ACTUAL = (
-        FIREBASE
-        + "/"
-        + RUTA_BASE
-        + "/"
-        + NODO
-        + "/ultima_lectura.json"
-    )
-
-    URL_HISTORIAL = (
-        FIREBASE
-        + "/"
-        + RUTA_BASE
-        + "/"
-        + NODO
-        + "/historial.json"
-    )
-
-
-    # ======================================
-    # DATOS PROMEDIADOS
+    # DATOS QUE SE ENVIARAN
     # ======================================
 
     datos = {
@@ -150,7 +163,7 @@ def enviar_datos(
             humedad_promedio,
 
         "profundidad_cm":
-            PROFUNDIDAD,
+            config_nodo["profundidad_cm"],
 
         "cantidad_lecturas":
             cantidad_lecturas,
@@ -164,73 +177,126 @@ def enviar_datos(
     }
 
 
-    headers = {
-        "Content-Type": "application/json"
-    }
+    # ======================================
+    # URL ULTIMA LECTURA
+    # ======================================
 
-    datos_json = ujson.dumps(datos)
+    url_ultima = (
+        url_base
+        + "/"
+        + ruta_base
+        + "/"
+        + nodo_id
+        + "/ultima_lectura.json"
+    )
+
+
+    # ======================================
+    # URL HISTORIAL
+    #
+    # Ahora usamos el numero de muestra
+    # como ID.
+    #
+    # Ejemplo:
+    # historial/118
+    # historial/119
+    # historial/120
+    #
+    # Esto evita duplicados.
+    # ======================================
+
+    url_historial = (
+        url_base
+        + "/"
+        + ruta_base
+        + "/"
+        + nodo_id
+        + "/historial/"
+        + str(contador)
+        + ".json"
+    )
+
+
+    respuesta_ultima = None
+    respuesta_historial = None
 
 
     try:
 
         # ==================================
-        # ULTIMO PROMEDIO
+        # 1. ENVIAR ULTIMA LECTURA
         # ==================================
 
-        respuesta = urequests.put(
-            URL_ACTUAL,
-            data=datos_json,
-            headers=headers
+        respuesta_ultima = urequests.put(
+            url_ultima,
+            json=datos,
+            timeout=10
         )
 
-        codigo_actual = respuesta.status_code
 
         print(
             "Ultimo promedio:",
-            codigo_actual
+            respuesta_ultima.status_code
         )
 
-        respuesta.close()
 
-
-        if codigo_actual != 200:
+        if respuesta_ultima.status_code != 200:
 
             print(
-                "Error actualizando ultimo promedio"
+                "ERROR enviando ultima lectura"
             )
 
             return False
 
 
+        # Cerrar conexion inmediatamente
+        respuesta_ultima.close()
+
+        respuesta_ultima = None
+
+
+        # Pequeña pausa para liberar socket
+        time.sleep_ms(300)
+
+
         # ==================================
-        # HISTORIAL DE PROMEDIOS
+        # 2. ENVIAR HISTORIAL
         # ==================================
 
-        respuesta = urequests.post(
-            URL_HISTORIAL,
-            data=datos_json,
-            headers=headers
+        respuesta_historial = urequests.put(
+            url_historial,
+            json=datos,
+            timeout=10
         )
 
-        codigo_historial = (
-            respuesta.status_code
-        )
 
         print(
             "Historial:",
-            codigo_historial
+            respuesta_historial.status_code
         )
 
-        respuesta.close()
 
-
-        if codigo_historial != 200:
+        if respuesta_historial.status_code != 200:
 
             print(
-                "Error guardando promedio"
+                "ERROR enviando historial"
             )
 
             return False
+
+
+        respuesta_historial.close()
+
+        respuesta_historial = None
+
+
+        # ==================================
+        # TODO CORRECTO
+        # ==================================
+
+        print(
+            "Promedio enviado correctamente"
+        )
 
 
         return True
@@ -238,10 +304,38 @@ def enviar_datos(
 
     except Exception as error:
 
+        print()
         print(
-            "Error enviando a Firebase:"
+            "ERROR enviando datos a Firebase:"
         )
 
         print(error)
 
+
         return False
+
+
+    finally:
+
+        # ==================================
+        # GARANTIZAR CIERRE DE CONEXIONES
+        # ==================================
+
+        if respuesta_ultima is not None:
+
+            try:
+
+                respuesta_ultima.close()
+
+            except:
+                pass
+
+
+        if respuesta_historial is not None:
+
+            try:
+
+                respuesta_historial.close()
+
+            except:
+                pass
