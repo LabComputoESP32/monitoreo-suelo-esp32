@@ -2,18 +2,43 @@ import urequests
 import time
 
 
-# ==========================================
+# ============================================================
+# CERRAR RESPUESTA DE FORMA SEGURA
+# ============================================================
+
+def cerrar_respuesta(respuesta):
+
+    if respuesta is not None:
+
+        try:
+            respuesta.close()
+
+        except:
+            pass
+
+
+# ============================================================
 # OBTENER SIGUIENTE NUMERO DE MUESTRA
-# ==========================================
+# ============================================================
 
 def obtener_siguiente_muestra(
     config_firebase,
     config_nodo
 ):
 
-    url_base = config_firebase["url"].rstrip("/")
-    ruta_base = config_firebase["ruta_base"]
-    nodo_id = config_nodo["id"]
+    url_base = (
+        config_firebase["url"]
+        .rstrip("/")
+    )
+
+    ruta_base = (
+        config_firebase["ruta_base"]
+    )
+
+    nodo_id = (
+        config_nodo["id"]
+    )
+
 
     url = (
         url_base
@@ -24,7 +49,9 @@ def obtener_siguiente_muestra(
         + "/ultima_lectura.json"
     )
 
+
     respuesta = None
+
 
     try:
 
@@ -32,15 +59,18 @@ def obtener_siguiente_muestra(
             "Consultando ultima muestra en Firebase..."
         )
 
+
         respuesta = urequests.get(
             url,
             timeout=10
         )
 
+
         print(
             "Firebase HTTP:",
             respuesta.status_code
         )
+
 
         if respuesta.status_code != 200:
 
@@ -54,9 +84,9 @@ def obtener_siguiente_muestra(
         datos = respuesta.json()
 
 
-        # ==================================
-        # SI TODAVIA NO HAY DATOS
-        # ==================================
+        # ====================================================
+        # SI NO EXISTEN DATOS ANTERIORES
+        # ====================================================
 
         if datos is None:
 
@@ -71,9 +101,9 @@ def obtener_siguiente_muestra(
             return 0
 
 
-        # ==================================
-        # SI NO EXISTE CAMPO MUESTRA
-        # ==================================
+        # ====================================================
+        # SI NO EXISTE EL CAMPO MUESTRA
+        # ====================================================
 
         if "muestra" not in datos:
 
@@ -88,7 +118,10 @@ def obtener_siguiente_muestra(
             return 0
 
 
-        ultima_muestra = datos["muestra"]
+        ultima_muestra = int(
+            datos["muestra"]
+        )
+
 
         siguiente_muestra = (
             ultima_muestra + 1
@@ -99,6 +132,7 @@ def obtener_siguiente_muestra(
             "Ultima muestra:",
             ultima_muestra
         )
+
 
         print(
             "Siguiente muestra:",
@@ -112,47 +146,81 @@ def obtener_siguiente_muestra(
     except Exception as error:
 
         print()
+
         print(
             "ERROR consultando Firebase:"
         )
 
-        print(error)
+        print(
+            error
+        )
+
 
         return None
 
 
     finally:
 
-        if respuesta is not None:
-
-            try:
-                respuesta.close()
-
-            except:
-                pass
+        cerrar_respuesta(
+            respuesta
+        )
 
 
-# ==========================================
-# ENVIAR DATOS A FIREBASE
-# ==========================================
+# ============================================================
+# CONSTRUIR REGISTRO
+# ============================================================
 
-def enviar_datos(
-    config_firebase,
+def construir_datos(
     config_nodo,
     temperatura_promedio,
     humedad_promedio,
     contador,
-    cantidad_lecturas
+    cantidad_lecturas,
+    timestamp_ms=None,
+    profundidad_cm=None
 ):
 
-    url_base = config_firebase["url"].rstrip("/")
-    ruta_base = config_firebase["ruta_base"]
-    nodo_id = config_nodo["id"]
+
+    # ========================================================
+    # PROFUNDIDAD
+    # ========================================================
+
+    if profundidad_cm is None:
+
+        profundidad_cm = (
+            config_nodo[
+                "profundidad_cm"
+            ]
+        )
 
 
-    # ======================================
-    # DATOS QUE SE ENVIARAN
-    # ======================================
+    # ========================================================
+    # TIMESTAMP
+    # ========================================================
+    #
+    # Si recibimos timestamp_ms:
+    # usamos la hora ORIGINAL de la medicion.
+    #
+    # Si no recibimos timestamp_ms:
+    # Firebase coloca la hora del servidor.
+    # ========================================================
+
+    if timestamp_ms is None:
+
+        timestamp = {
+            ".sv": "timestamp"
+        }
+
+    else:
+
+        timestamp = int(
+            timestamp_ms
+        )
+
+
+    # ========================================================
+    # REGISTRO
+    # ========================================================
 
     datos = {
 
@@ -163,47 +231,63 @@ def enviar_datos(
             humedad_promedio,
 
         "profundidad_cm":
-            config_nodo["profundidad_cm"],
+            profundidad_cm,
 
         "cantidad_lecturas":
             cantidad_lecturas,
 
         "muestra":
-            contador,
+            int(contador),
 
-        "timestamp": {
-            ".sv": "timestamp"
-        }
+        "timestamp":
+            timestamp
     }
 
 
-    # ======================================
-    # URL ULTIMA LECTURA
-    # ======================================
+    return datos
 
-    url_ultima = (
-        url_base
-        + "/"
-        + ruta_base
-        + "/"
-        + nodo_id
-        + "/ultima_lectura.json"
+
+# ============================================================
+# ENVIAR REGISTRO A FIREBASE
+# ============================================================
+
+def enviar_registro(
+    config_firebase,
+    config_nodo,
+    datos
+):
+
+
+    url_base = (
+        config_firebase["url"]
+        .rstrip("/")
     )
 
 
-    # ======================================
+    ruta_base = (
+        config_firebase[
+            "ruta_base"
+        ]
+    )
+
+
+    nodo_id = (
+        config_nodo[
+            "id"
+        ]
+    )
+
+
+    contador = int(
+        datos[
+            "muestra"
+        ]
+    )
+
+
+    # ========================================================
     # URL HISTORIAL
-    #
-    # Ahora usamos el numero de muestra
-    # como ID.
-    #
-    # Ejemplo:
-    # historial/118
-    # historial/119
-    # historial/120
-    #
-    # Esto evita duplicados.
-    # ======================================
+    # ========================================================
 
     url_historial = (
         url_base
@@ -217,56 +301,51 @@ def enviar_datos(
     )
 
 
-    respuesta_ultima = None
+    # ========================================================
+    # URL ULTIMA LECTURA
+    # ========================================================
+
+    url_ultima = (
+        url_base
+        + "/"
+        + ruta_base
+        + "/"
+        + nodo_id
+        + "/ultima_lectura.json"
+    )
+
+
     respuesta_historial = None
+    respuesta_ultima = None
 
 
     try:
 
-        # ==================================
-        # 1. ENVIAR ULTIMA LECTURA
-        # ==================================
-
-        respuesta_ultima = urequests.put(
-            url_ultima,
-            json=datos,
-            timeout=10
-        )
-
+        # ====================================================
+        # 1. ENVIAR HISTORIAL
+        # ====================================================
+        #
+        # Primero guardamos el historico.
+        #
+        # Si algo falla despues, el registro al menos
+        # permanece guardado en el historial.
+        #
+        # PUT + numero de muestra permite volver a intentar
+        # sin crear duplicados.
+        # ====================================================
 
         print(
-            "Ultimo promedio:",
-            respuesta_ultima.status_code
+            "Enviando historial:",
+            contador
         )
 
 
-        if respuesta_ultima.status_code != 200:
-
-            print(
-                "ERROR enviando ultima lectura"
+        respuesta_historial = (
+            urequests.put(
+                url_historial,
+                json=datos,
+                timeout=10
             )
-
-            return False
-
-
-        # Cerrar conexion inmediatamente
-        respuesta_ultima.close()
-
-        respuesta_ultima = None
-
-
-        # Pequeña pausa para liberar socket
-        time.sleep_ms(300)
-
-
-        # ==================================
-        # 2. ENVIAR HISTORIAL
-        # ==================================
-
-        respuesta_historial = urequests.put(
-            url_historial,
-            json=datos,
-            timeout=10
         )
 
 
@@ -276,7 +355,10 @@ def enviar_datos(
         )
 
 
-        if respuesta_historial.status_code != 200:
+        if (
+            respuesta_historial.status_code
+            != 200
+        ):
 
             print(
                 "ERROR enviando historial"
@@ -285,14 +367,67 @@ def enviar_datos(
             return False
 
 
-        respuesta_historial.close()
+        cerrar_respuesta(
+            respuesta_historial
+        )
 
         respuesta_historial = None
 
 
-        # ==================================
+        # Liberar socket
+
+        time.sleep_ms(
+            300
+        )
+
+
+        # ====================================================
+        # 2. ACTUALIZAR ULTIMA LECTURA
+        # ====================================================
+
+        print(
+            "Actualizando ultima lectura:",
+            contador
+        )
+
+
+        respuesta_ultima = (
+            urequests.put(
+                url_ultima,
+                json=datos,
+                timeout=10
+            )
+        )
+
+
+        print(
+            "Ultimo promedio:",
+            respuesta_ultima.status_code
+        )
+
+
+        if (
+            respuesta_ultima.status_code
+            != 200
+        ):
+
+            print(
+                "ERROR enviando ultima lectura"
+            )
+
+            return False
+
+
+        cerrar_respuesta(
+            respuesta_ultima
+        )
+
+        respuesta_ultima = None
+
+
+        # ====================================================
         # TODO CORRECTO
-        # ==================================
+        # ====================================================
 
         print(
             "Promedio enviado correctamente"
@@ -305,11 +440,14 @@ def enviar_datos(
     except Exception as error:
 
         print()
+
         print(
             "ERROR enviando datos a Firebase:"
         )
 
-        print(error)
+        print(
+            error
+        )
 
 
         return False
@@ -317,25 +455,223 @@ def enviar_datos(
 
     finally:
 
-        # ==================================
-        # GARANTIZAR CIERRE DE CONEXIONES
-        # ==================================
+        cerrar_respuesta(
+            respuesta_historial
+        )
 
-        if respuesta_ultima is not None:
-
-            try:
-
-                respuesta_ultima.close()
-
-            except:
-                pass
+        cerrar_respuesta(
+            respuesta_ultima
+        )
 
 
-        if respuesta_historial is not None:
+# ============================================================
+# ENVIAR DATOS NORMALES
+# ============================================================
+#
+# Esta funcion conserva compatibilidad con tu main.py actual.
+#
+# Por ahora, si main.py no manda timestamp_ms,
+# Firebase sigue poniendo el timestamp del servidor.
+#
+# Mas adelante main.py enviara el timestamp local.
+# ============================================================
 
-            try:
+def enviar_datos(
+    config_firebase,
+    config_nodo,
+    temperatura_promedio,
+    humedad_promedio,
+    contador,
+    cantidad_lecturas,
+    timestamp_ms=None
+):
 
-                respuesta_historial.close()
 
-            except:
-                pass
+    datos = construir_datos(
+
+        config_nodo,
+
+        temperatura_promedio,
+
+        humedad_promedio,
+
+        contador,
+
+        cantidad_lecturas,
+
+        timestamp_ms=
+            timestamp_ms
+    )
+
+
+    return enviar_registro(
+        config_firebase,
+        config_nodo,
+        datos
+    )
+
+
+# ============================================================
+# ENVIAR REGISTRO PENDIENTE
+# ============================================================
+#
+# Esta sera la funcion utilizada por offline_manager.
+#
+# Recibe exactamente el registro que estaba guardado
+# en la memoria flash.
+#
+# De esta manera conserva:
+#
+# - numero de muestra
+# - temperatura
+# - humedad
+# - profundidad
+# - cantidad de lecturas
+# - timestamp ORIGINAL
+# ============================================================
+
+def enviar_registro_pendiente(
+    config_firebase,
+    config_nodo,
+    registro
+):
+
+
+    # ========================================================
+    # VALIDAR MUESTRA
+    # ========================================================
+
+    if (
+        "muestra"
+        not in registro
+    ):
+
+        print(
+            "ERROR: registro pendiente sin muestra"
+        )
+
+        return False
+
+
+    # ========================================================
+    # VALIDAR TEMPERATURA
+    # ========================================================
+
+    if (
+        "temperatura_promedio"
+        not in registro
+    ):
+
+        print(
+            "ERROR: registro pendiente sin temperatura"
+        )
+
+        return False
+
+
+    # ========================================================
+    # VALIDAR HUMEDAD
+    # ========================================================
+
+    if (
+        "humedad_promedio"
+        not in registro
+    ):
+
+        print(
+            "ERROR: registro pendiente sin humedad"
+        )
+
+        return False
+
+
+    # ========================================================
+    # OBTENER TIMESTAMP ORIGINAL
+    # ========================================================
+
+    timestamp_original = (
+        registro.get(
+            "timestamp",
+            None
+        )
+    )
+
+
+    if (
+        timestamp_original
+        is None
+    ):
+
+        print(
+            "ADVERTENCIA:"
+        )
+
+        print(
+            "Registro pendiente sin timestamp original"
+        )
+
+
+    # ========================================================
+    # CONSTRUIR REGISTRO PARA FIREBASE
+    # ========================================================
+
+    datos = construir_datos(
+
+        config_nodo,
+
+        registro[
+            "temperatura_promedio"
+        ],
+
+        registro[
+            "humedad_promedio"
+        ],
+
+        registro[
+            "muestra"
+        ],
+
+        registro.get(
+            "cantidad_lecturas",
+            12
+        ),
+
+        timestamp_ms=
+            timestamp_original,
+
+        profundidad_cm=
+            registro.get(
+                "profundidad_cm",
+                config_nodo[
+                    "profundidad_cm"
+                ]
+            )
+    )
+
+
+    print()
+
+    print(
+        "Enviando registro pendiente:"
+    )
+
+    print(
+        "Muestra:",
+        datos["muestra"]
+    )
+
+    print(
+        "Timestamp original:",
+        datos["timestamp"]
+    )
+
+
+    # ========================================================
+    # ENVIAR
+    # ========================================================
+
+    return enviar_registro(
+        config_firebase,
+        config_nodo,
+        datos
+    )
