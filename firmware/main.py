@@ -605,7 +605,11 @@ wifi_estaba_conectado = internet_disponible
 
 if internet_disponible:
 
-    intentar_sincronizar_hora()
+    # Al arrancar con Internet disponible
+    # actualizamos siempre el reloj mediante NTP.
+    intentar_sincronizar_hora(
+        forzar=True
+    )
 
 
 # ============================================================
@@ -1123,3 +1127,4 @@ while True:
             "Pendientes:",
             cantidad_pendientes()
         )
+
