@@ -17,8 +17,6 @@ import gc
 
 ARCHIVOS_FIRMWARE = [
 
-    "main.py",
-
     "wifi_manager.py",
 
     "sensor_manager.py",
@@ -30,6 +28,12 @@ ARCHIVOS_FIRMWARE = [
     "time_manager.py",
 
     "max31865.py",
+
+    "control_manager.py",
+
+    "actuator_manager.py",
+
+    "main.py",
 
     "updater.py"
 ]
