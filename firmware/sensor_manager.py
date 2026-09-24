@@ -512,7 +512,8 @@ def leer_sensor(
 def obtener_promedio(
     config_sensor,
     cantidad_muestras,
-    intervalo_segundos
+    intervalo_segundos,
+    callback_control=None
 ):
 
     temperaturas = []
@@ -607,6 +608,34 @@ def obtener_promedio(
             print(
                 "Humedad: lectura invalida"
             )
+
+
+        # ==================================
+        # REVISAR COMANDOS DE CONTROL
+        # ==================================
+        #
+        # El main.py puede enviar una funcion
+        # callback para revisar Firebase despues
+        # de cada lectura sin acoplar este modulo
+        # directamente con control_manager.py.
+        #
+        # Con intervalo de 5 segundos, el tiempo
+        # de respuesta esperado sera de ~0-5 s
+        # mas el tiempo de la consulta HTTP.
+        # ==================================
+
+        if callback_control is not None:
+
+            try:
+
+                callback_control()
+
+            except Exception as error:
+
+                print(
+                    "ERROR revisando control:",
+                    error
+                )
 
 
         # ==================================
@@ -714,8 +743,9 @@ def obtener_promedio(
         cantidad_muestras
     )
 
-
     return (
         temperatura_promedio,
         humedad_promedio
     )
+
+
