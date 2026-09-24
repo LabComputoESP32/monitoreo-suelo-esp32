@@ -24,6 +24,15 @@ from time_manager import (
     sincronizar_hora,
     obtener_timestamp_ms
 )
+from control_manager import (
+    revisar_control,
+    registrar_comando_ejecutado
+)
+
+from actuator_manager import (
+    aplicar_comando,
+    actualizar_actuador
+)
 
 from updater import verificar_y_actualizar
 
@@ -174,7 +183,54 @@ def wifi_conectado():
     except Exception:
 
         return False
+# ============================================================
+# REVISAR CONTROL DURANTE LAS MEDICIONES
+# ============================================================
 
+def revisar_control_durante_medicion():
+
+    # ========================================================
+    # ACTUALIZAR ACTUADOR / TEMPORIZADOR
+    # ========================================================
+
+    actualizar_actuador()
+
+
+    # ========================================================
+    # BUSCAR NUEVOS COMANDOS
+    # ========================================================
+
+    if wifi_conectado():
+
+        comando = revisar_control(
+            config_firebase,
+            config_nodo
+        )
+
+
+        if comando is not None:
+
+            # ----------------------------------------------
+            # 1. EJECUTAR EL COMANDO
+            # ----------------------------------------------
+
+            aplicado = aplicar_comando(
+                comando
+            )
+
+
+            # ----------------------------------------------
+            # 2. SOLO SI SE EJECUTO CORRECTAMENTE,
+            #    REGISTRARLO Y CONFIRMARLO
+            # ----------------------------------------------
+
+            if aplicado:
+
+                registrar_comando_ejecutado(
+                    config_firebase,
+                    config_nodo,
+                    comando
+                )
 
 # ============================================================
 # INTENTAR CONEXION WIFI
@@ -779,6 +835,13 @@ while True:
 
 
     # ========================================================
+    # REVISAR CONTROL AL INICIO DEL PERIODO
+    # ========================================================
+
+    revisar_control_durante_medicion()
+
+
+    # ========================================================
     # 1. VERIFICAR WIFI AL INICIO DEL PERIODO
     # ========================================================
 
@@ -830,6 +893,7 @@ while True:
             wifi_estaba_conectado = True
 
 
+
     # ========================================================
     # 2. TOMAR MUESTRAS
     # ========================================================
@@ -838,7 +902,8 @@ while True:
         obtener_promedio(
             config_sensor,
             cantidad_muestras,
-            intervalo_muestreo
+            intervalo_muestreo,
+            revisar_control_durante_medicion
         )
     )
 
@@ -863,8 +928,6 @@ while True:
         )
 
         continue
-
-
     # ========================================================
     # 4. REVISAR WIFI DESPUES DE LAS 12 LECTURAS
     # ========================================================
@@ -1127,4 +1190,5 @@ while True:
             "Pendientes:",
             cantidad_pendientes()
         )
+
 
