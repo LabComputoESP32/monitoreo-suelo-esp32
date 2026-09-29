@@ -838,3 +838,139 @@ def revisar_control(
 
 
     return comando
+
+
+# ============================================================
+# URL DEL ESTADO REAL DEL ACTUADOR
+# ============================================================
+
+def obtener_url_estado_actuador(
+    config_firebase,
+    config_nodo
+):
+
+    url_base = config_firebase[
+        "url"
+    ].rstrip("/")
+
+    nodo_id = config_nodo[
+        "id"
+    ]
+
+    return (
+        url_base
+        + "/estado_actuador/"
+        + nodo_id
+        + ".json"
+    )
+
+
+# ============================================================
+# PUBLICAR ESTADO REAL DEL ACTUADOR
+# ============================================================
+
+def publicar_estado_actuador(
+    config_firebase,
+    config_nodo,
+    estado_actuador,
+    evento="actualizacion"
+):
+
+    url = obtener_url_estado_actuador(
+        config_firebase,
+        config_nodo
+    )
+
+    datos = {
+
+        "estado":
+            bool(
+                estado_actuador.get(
+                    "estado",
+                    False
+                )
+            ),
+
+        "modo":
+            estado_actuador.get(
+                "modo",
+                "manual"
+            ),
+
+        "temporizador_activo":
+            bool(
+                estado_actuador.get(
+                    "temporizador_activo",
+                    False
+                )
+            ),
+
+        "evento":
+            evento,
+
+        "comando_id":
+            ultimo_comando_ejecutado
+    }
+
+
+    respuesta = None
+
+
+    try:
+
+        print()
+
+        print(
+            "Publicando estado real del actuador..."
+        )
+
+
+        respuesta = urequests.put(
+            url,
+            json=datos,
+            timeout=5
+        )
+
+
+        print(
+            "Estado actuador HTTP:",
+            respuesta.status_code
+        )
+
+
+        if respuesta.status_code == 200:
+
+            print(
+                "Estado real del actuador publicado"
+            )
+
+            return True
+
+
+        return False
+
+
+    except Exception as error:
+
+        print(
+            "ERROR publicando estado del actuador:",
+            error
+        )
+
+        return False
+
+
+    finally:
+
+        if respuesta is not None:
+
+            try:
+
+                respuesta.close()
+
+            except:
+
+                pass
+
+
+
