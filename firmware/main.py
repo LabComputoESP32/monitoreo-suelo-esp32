@@ -26,12 +26,14 @@ from time_manager import (
 )
 from control_manager import (
     revisar_control,
-    registrar_comando_ejecutado
+    registrar_comando_ejecutado,
+    publicar_estado_actuador
 )
 
 from actuator_manager import (
     aplicar_comando,
-    actualizar_actuador
+    actualizar_actuador,
+    obtener_estado
 )
 
 from updater import verificar_y_actualizar
@@ -62,6 +64,30 @@ config_nodo = config["nodo"]
 config_medicion = config["medicion"]
 
 config_github = config["github"]
+
+
+# ============================================================
+# NODO ENCARGADO DEL CONTROL DE VENTILACION
+# ============================================================
+
+CONTROL_NODE_ID = "nodo_01"
+
+control_habilitado = (
+    config_nodo["id"]
+    ==
+    CONTROL_NODE_ID
+)
+
+# El estado se publica al arrancar para que el Dashboard
+# no conserve un ON antiguo despues de un reinicio.
+estado_actuador_pendiente = (
+    control_habilitado
+)
+
+evento_estado_pendiente = (
+    "inicio"
+)
+
 
 
 # ============================================================
@@ -184,53 +210,150 @@ def wifi_conectado():
 
         return False
 # ============================================================
+# MARCAR ESTADO DEL ACTUADOR COMO PENDIENTE DE PUBLICAR
+# ============================================================
+
+def marcar_estado_actuador_pendiente(
+    evento
+):
+
+    global estado_actuador_pendiente
+    global evento_estado_pendiente
+
+    estado_actuador_pendiente = True
+
+    evento_estado_pendiente = (
+        evento
+    )
+
+
+# ============================================================
+# INTENTAR PUBLICAR ESTADO REAL DEL ACTUADOR
+# ============================================================
+
+def publicar_estado_real_pendiente():
+
+    global estado_actuador_pendiente
+    global evento_estado_pendiente
+
+
+    if not control_habilitado:
+
+        return False
+
+
+    if not estado_actuador_pendiente:
+
+        return True
+
+
+    if not wifi_conectado():
+
+        return False
+
+
+    publicado = publicar_estado_actuador(
+        config_firebase,
+        config_nodo,
+        obtener_estado(),
+        evento_estado_pendiente
+    )
+
+
+    if publicado:
+
+        estado_actuador_pendiente = False
+
+
+    return publicado
+
+
+# ============================================================
 # REVISAR CONTROL DURANTE LAS MEDICIONES
 # ============================================================
 
 def revisar_control_durante_medicion():
 
+    # Los nodos 02, 03 y 04 solamente monitorean.
+    if not control_habilitado:
+
+        return
+
+
     # ========================================================
     # ACTUALIZAR ACTUADOR / TEMPORIZADOR
     # ========================================================
 
-    actualizar_actuador()
+    temporizador_finalizado = (
+        actualizar_actuador()
+    )
+
+
+    if temporizador_finalizado:
+
+        marcar_estado_actuador_pendiente(
+            "temporizador_finalizado"
+        )
+
+
+    # Sin WiFi el temporizador sigue funcionando localmente.
+    # El estado se enviara cuando regrese la conexion.
+    if not wifi_conectado():
+
+        return
+
+
+    # ========================================================
+    # PUBLICAR ESTADO PENDIENTE
+    # ========================================================
+
+    publicar_estado_real_pendiente()
 
 
     # ========================================================
     # BUSCAR NUEVOS COMANDOS
     # ========================================================
 
-    if wifi_conectado():
+    comando = revisar_control(
+        config_firebase,
+        config_nodo
+    )
 
-        comando = revisar_control(
-            config_firebase,
-            config_nodo
+
+    if comando is not None:
+
+        # ----------------------------------------------
+        # 1. EJECUTAR EL COMANDO
+        # ----------------------------------------------
+
+        aplicado = aplicar_comando(
+            comando
         )
 
 
-        if comando is not None:
+        # ----------------------------------------------
+        # 2. REGISTRAR Y CONFIRMAR
+        # ----------------------------------------------
 
-            # ----------------------------------------------
-            # 1. EJECUTAR EL COMANDO
-            # ----------------------------------------------
+        if aplicado:
 
-            aplicado = aplicar_comando(
+            registrar_comando_ejecutado(
+                config_firebase,
+                config_nodo,
                 comando
             )
 
 
-            # ----------------------------------------------
-            # 2. SOLO SI SE EJECUTO CORRECTAMENTE,
-            #    REGISTRARLO Y CONFIRMARLO
-            # ----------------------------------------------
+            # ------------------------------------------
+            # 3. PUBLICAR ESTADO REAL RESULTANTE
+            # ------------------------------------------
 
-            if aplicado:
+            marcar_estado_actuador_pendiente(
+                "comando_aplicado"
+            )
 
-                registrar_comando_ejecutado(
-                    config_firebase,
-                    config_nodo,
-                    comando
-                )
+            publicar_estado_real_pendiente()
+
 
 # ============================================================
 # INTENTAR CONEXION WIFI
@@ -1190,5 +1313,6 @@ while True:
             "Pendientes:",
             cantidad_pendientes()
         )
+
 
 
